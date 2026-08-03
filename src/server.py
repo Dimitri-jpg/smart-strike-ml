@@ -5,6 +5,7 @@ import joblib
 
 from src.features import extract_features
 from src.functions.visualization import create_visualization
+from src.functions.detect_shots import detect_shots
 from fastapi.responses import StreamingResponse
 
 app = FastAPI()
@@ -75,3 +76,11 @@ def visualize(request: VisualizationRequest):
         image,
         media_type="image/png"
     )
+
+
+@app.post("/predict-multiple")
+def predict_multiple(data: SensorData):
+
+    df = pd.DataFrame(data.samples)
+
+    return detect_shots(df, model)
