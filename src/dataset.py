@@ -1,6 +1,7 @@
-import pandas as pd
 import glob
 import os
+
+import pandas as pd
 
 
 FEATURE_COLUMNS = [
@@ -20,35 +21,85 @@ FEATURE_COLUMNS = [
 ]
 
 
+def parse_filename(filename):
+
+    name = os.path.splitext(
+        os.path.basename(filename)
+    )[0]
+
+    parts = name.split("_")
+
+    score = None
+    session_id = None
+
+    for part in reversed(parts):
+
+        if part.startswith("score"):
+            score = int(
+                part.replace("score", "")
+            )
+            break
+
+    score_index = parts.index(
+        next(
+            p for p in parts
+            if p.startswith("score")
+        )
+    )
+
+    session_id = int(
+        parts[score_index - 1]
+    )
+
+    shot_type = "_".join(
+        parts[1:score_index - 3]
+    )
+
+    date = parts[score_index - 3]
+    time = parts[score_index - 2]
+
+    return {
+        "shot_type": shot_type,
+        "score": score,
+        "session_id": session_id,
+        "date": date,
+        "time": time
+    }
+
+
 def load_dataset(folder):
 
     samples = []
 
     files = sorted(
-        [
-            f for f in glob.glob(os.path.join(folder, "*.csv"))
-            if "session_75_20260720_210457" not in os.path.basename(f)
-        ]
+        glob.glob(
+            os.path.join(folder, "*.csv")
+        )
     )
 
     print(f"Found {len(files)} files")
 
     for file in files:
 
+        info = parse_filename(file)
+
         df = pd.read_csv(file)
 
-        label = df["shot_type"].iloc[0]
-
-        samples.append({
+        sample = {
             "file": file,
             "data": df[FEATURE_COLUMNS],
-            "label": label
-        })
+            "label": info["shot_type"],
+            "score": info["score"],
+            "session_id": info["session_id"]
+        }
+
+        samples.append(sample)
 
         print(
             os.path.basename(file),
             "->",
-            label
+            info["shot_type"],
+            f"(score={info['score']})"
         )
 
     return samples

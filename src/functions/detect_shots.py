@@ -10,7 +10,11 @@ WINDOW_SIZE = 700
 HALF_WINDOW = WINDOW_SIZE // 2
 
 
-def detect_shots(df: pd.DataFrame, model):
+def detect_shots(
+    df: pd.DataFrame,
+    classifier,
+    quality_regressor
+):
 
     accel = np.sqrt(
         df.accel_x**2 +
@@ -42,11 +46,17 @@ def detect_shots(df: pd.DataFrame, model):
 
         X = pd.DataFrame(
             [features],
-            columns=model.feature_names_in_
+            columns=classifier.feature_names_in_
         )
 
-        prediction = model.predict(X)[0]
-        probabilities = model.predict_proba(X)[0]
+
+        prediction = classifier.predict(X)[0]
+
+        probabilities = classifier.predict_proba(X)[0]
+
+
+        score = quality_regressor.predict(X)[0]
+
 
         predictions.append({
 
@@ -54,7 +64,14 @@ def detect_shots(df: pd.DataFrame, model):
 
             "prediction": prediction,
 
-            "confidence": float(np.max(probabilities))
+            "confidence": float(
+                np.max(probabilities)
+            ),
+
+            "score": float(
+                np.clip(score, 1, 10)
+            )
         })
+
 
     return predictions

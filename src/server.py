@@ -1,20 +1,34 @@
 from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-import pandas as pd
+
 import joblib
+import pandas as pd
+import time
 
 from src.features import extract_features
 from src.functions.visualization import create_visualization
 from src.functions.detect_shots import detect_shots
-from fastapi.responses import StreamingResponse
 
 app = FastAPI()
 
-model = joblib.load("models/forehand_backhand_model.pkl")
+classifier = joblib.load(
+    "models/classifier.pkl"
+)
+
+quality_regressor = joblib.load(
+    "models/quality_regressor.pkl"
+)
+
+label_encoder = joblib.load(
+    "models/label_encoder.pkl"
+)
+
 
 
 class SensorData(BaseModel):
     samples: list
+
 
 class PredictSample(BaseModel):
     accel_x: float
@@ -39,7 +53,6 @@ class VisualizationRequest(BaseModel):
     samples: list[PredictSample]
 
 
-
 @app.post("/predict")
 def predict(data: SensorData):
 
@@ -51,15 +64,52 @@ def predict(data: SensorData):
 
     features = extract_features(sample)
 
-    X = pd.DataFrame([features], columns=model.feature_names_in_)
+    classifier_input = pd.DataFrame(
+        [features],
+        columns=classifier.feature_names_in_
+    )
 
-    prediction = model.predict(X)[0]
+    prediction = classifier.predict(
+        classifier_input
+    )[0]
 
-    probabilities = model.predict_proba(X)[0]
+    probabilities = classifier.predict_proba(
+        classifier_input
+    )[0]
+
+    confidence = float(
+        probabilities.max()
+    )
+
+    regressor_features = features.copy()
+
+    regressor_features["shot_type"] = label_encoder.transform(
+        [prediction]
+    )[0]
+
+    regressor_input = pd.DataFrame(
+        [regressor_features],
+        columns=quality_regressor.feature_names_in_
+    )
+
+    score = float(
+        quality_regressor.predict(
+            regressor_input
+        )[0]
+    )
+
+    score = max(
+        1.0,
+        min(
+            10.0,
+            score
+        )
+    )
 
     return {
         "prediction": prediction,
-        "confidence": float(max(probabilities))
+        "confidence": round(confidence, 4),
+        "score": round(score, 2)
     }
 
 
@@ -67,7 +117,10 @@ def predict(data: SensorData):
 def visualize(request: VisualizationRequest):
 
     df = pd.DataFrame(
-        [sample.model_dump() for sample in request.samples]
+        [
+            sample.model_dump()
+            for sample in request.samples
+        ]
     )
 
     image = create_visualization(df)
@@ -81,6 +134,20 @@ def visualize(request: VisualizationRequest):
 @app.post("/predict-multiple")
 def predict_multiple(data: SensorData):
 
+    start = time.time()
+
+    print("Received samples:", len(data.samples))
+
     df = pd.DataFrame(data.samples)
 
-    return detect_shots(df, model)
+    print("DataFrame created:", time.time() - start)
+
+    result = detect_shots(
+        df,
+        classifier,
+        quality_regressor
+    )
+
+    print("Detection finished:", time.time() - start)
+
+    return result
