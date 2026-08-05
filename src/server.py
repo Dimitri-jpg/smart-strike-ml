@@ -30,7 +30,7 @@ class SensorData(BaseModel):
     samples: list
 
 
-class PredictSample(BaseModel):
+class SensorSample(BaseModel):
     accel_x: float
     accel_y: float
     accel_z: float
@@ -50,7 +50,7 @@ class PredictSample(BaseModel):
 
 
 class VisualizationRequest(BaseModel):
-    samples: list[PredictSample]
+    samples: list[SensorSample]
 
 
 @app.post("/predict")
@@ -131,23 +131,17 @@ def visualize(request: VisualizationRequest):
     )
 
 
-@app.post("/predict-multiple")
-def predict_multiple(data: SensorData):
+@app.post("/detect-multiple")
+def detect_multiple(data: SensorData):
 
     start = time.time()
 
-    print("Received samples:", len(data.samples))
-
     df = pd.DataFrame(data.samples)
-
-    print("DataFrame created:", time.time() - start)
 
     result = detect_shots(
         df,
         classifier,
         quality_regressor
     )
-
-    print("Detection finished:", time.time() - start)
 
     return result
