@@ -85,6 +85,11 @@ def load_dataset(folder):
 
         df = pd.read_csv(file)
 
+        TRIM_END = 150
+
+        if len(df) > TRIM_END:
+            df = df.iloc[:-TRIM_END].reset_index(drop=True)
+
         sample = {
             "file": file,
             "data": df[FEATURE_COLUMNS],

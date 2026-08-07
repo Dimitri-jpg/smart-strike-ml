@@ -1,13 +1,17 @@
 import numpy as np
 import pandas as pd
 
-from scipy.signal import find_peaks
+from scipy.signal import find_peaks, savgol_filter
 
 from src.features import extract_features
 
 
 WINDOW_SIZE = 700
 HALF_WINDOW = WINDOW_SIZE // 2
+
+MIN_PEAK_DISTANCE = 500
+MIN_PROMINENCE = 2.0
+MIN_MOTION = 3.0
 
 
 def detect_shots(
@@ -17,28 +21,90 @@ def detect_shots(
 ):
 
     accel = np.sqrt(
-        df.accel_x**2 +
-        df.accel_y**2 +
-        df.accel_z**2
+        df.accel_x.values ** 2 +
+        df.accel_y.values ** 2 +
+        df.accel_z.values ** 2
     )
 
-    peaks, _ = find_peaks(
+
+    peaks, properties = find_peaks(
         accel,
-        prominence=2.0,
-        distance=WINDOW_SIZE // 2
+        prominence=MIN_PROMINENCE,
+        distance=MIN_PEAK_DISTANCE
     )
+
+
+    if len(peaks) == 0:
+        return []
+
+
+    candidates = sorted(
+        peaks,
+        key=lambda p: accel[p],
+        reverse=True
+    )
+
+
+    accepted_peaks = []
+
+
+    for peak in candidates:
+
+        too_close = False
+
+        for accepted in accepted_peaks:
+
+            if abs(peak - accepted) < MIN_PEAK_DISTANCE:
+                too_close = True
+                break
+
+
+        if too_close:
+            continue
+
+
+        start = max(
+            0,
+            peak - HALF_WINDOW
+        )
+
+        end = min(
+            len(df),
+            peak + HALF_WINDOW
+        )
+
+
+        window_motion = accel[start:end]
+
+
+        if len(window_motion) < WINDOW_SIZE:
+            continue
+
+
+        # reject weak events
+        if np.max(window_motion) < MIN_MOTION:
+            continue
+
+
+        accepted_peaks.append(peak)
+
+
+    accepted_peaks.sort()
+
 
     predictions = []
 
-    for peak in peaks:
+
+    for peak in accepted_peaks:
 
         start = peak - HALF_WINDOW
         end = peak + HALF_WINDOW
 
-        if start < 0 or end > len(df):
-            continue
 
-        window = df.iloc[start:end].reset_index(drop=True)
+        window = df.iloc[
+            start:end
+        ].reset_index(drop=True)
+
 
         features = extract_features({
             "data": window
@@ -60,7 +126,11 @@ def detect_shots(
 
         predictions.append({
 
-            "sample": int(peak),
+            "start_sample": int(start),
+
+            "peak_sample": int(peak),
+
+            "end_sample": int(end),
 
             "prediction": prediction,
 
