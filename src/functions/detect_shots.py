@@ -1,7 +1,8 @@
+import joblib
 import numpy as np
 import pandas as pd
 
-from scipy.signal import find_peaks, savgol_filter
+from scipy.signal import find_peaks
 
 from src.features import extract_features
 
@@ -12,6 +13,11 @@ HALF_WINDOW = WINDOW_SIZE // 2
 MIN_PEAK_DISTANCE = 500
 MIN_PROMINENCE = 2.0
 MIN_MOTION = 3.0
+
+
+shot_detector = joblib.load(
+    "models/shot_detector.pkl"
+)
 
 
 def detect_shots(
@@ -26,17 +32,14 @@ def detect_shots(
         df.accel_z.values ** 2
     )
 
-
-    peaks, properties = find_peaks(
+    peaks, _ = find_peaks(
         accel,
         prominence=MIN_PROMINENCE,
         distance=MIN_PEAK_DISTANCE
     )
 
-
     if len(peaks) == 0:
         return []
-
 
     candidates = sorted(
         peaks,
@@ -44,9 +47,7 @@ def detect_shots(
         reverse=True
     )
 
-
     accepted_peaks = []
-
 
     for peak in candidates:
 
@@ -58,71 +59,79 @@ def detect_shots(
                 too_close = True
                 break
 
-
         if too_close:
             continue
 
+        start = peak - HALF_WINDOW
+        end = peak + HALF_WINDOW
 
-        start = max(
-            0,
-            peak - HALF_WINDOW
-        )
+        if start < 0 or end > len(df):
+            continue
 
-        end = min(
-            len(df),
-            peak + HALF_WINDOW
-        )
+        window = df.iloc[
+            start:end
+        ].reset_index(drop=True)
 
+        if len(window) != WINDOW_SIZE:
+            continue
 
         window_motion = accel[start:end]
 
-
-        if len(window_motion) < WINDOW_SIZE:
-            continue
-
-
-        # reject weak events
         if np.max(window_motion) < MIN_MOTION:
             continue
 
+        features = extract_features({
+            "data": window
+        })
+
+        detector_X = pd.DataFrame(
+            [features],
+            columns=shot_detector.feature_names_in_
+        )
+
+        is_shot = shot_detector.predict(
+            detector_X
+        )[0]
+
+        if is_shot != "SHOT":
+            print("NO SHOT")
+            continue
 
         accepted_peaks.append(peak)
 
-
     accepted_peaks.sort()
 
-
     predictions = []
-
 
     for peak in accepted_peaks:
 
         start = peak - HALF_WINDOW
         end = peak + HALF_WINDOW
 
-
         window = df.iloc[
             start:end
         ].reset_index(drop=True)
-
 
         features = extract_features({
             "data": window
         })
 
-        X = pd.DataFrame(
+        classifier_X = pd.DataFrame(
             [features],
             columns=classifier.feature_names_in_
         )
 
+        prediction = classifier.predict(
+            classifier_X
+        )[0]
 
-        prediction = classifier.predict(X)[0]
+        probabilities = classifier.predict_proba(
+            classifier_X
+        )[0]
 
-        probabilities = classifier.predict_proba(X)[0]
-
-
-        score = quality_regressor.predict(X)[0]
-
+        score = quality_regressor.predict(
+            classifier_X
+        )[0]
 
         predictions.append({
 

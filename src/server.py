@@ -133,15 +133,24 @@ def visualize(request: VisualizationRequest):
 
 @app.post("/detect-multiple")
 def detect_multiple(data: SensorData):
-
-    start = time.time()
-
     df = pd.DataFrame(data.samples)
 
-    result = detect_shots(
+    predictions = detect_shots(
         df,
         classifier,
         quality_regressor
     )
 
-    return result
+    if not predictions:
+        return [
+            {
+                "start_sample": 0,
+                "peak_sample": 0,
+                "end_sample": 0,
+                "prediction": "NO_SHOT",
+                "confidence": 0.0,
+                "score": 0.0
+            }
+        ]
+
+    return predictions
