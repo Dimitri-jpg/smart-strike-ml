@@ -24,6 +24,37 @@ label_encoder = joblib.load(
     "models/label_encoder.pkl"
 )
 
+shot_detector = joblib.load(
+    "models/shot_detector.pkl"
+)
+
+print("=" * 50)
+print("CLASSIFIER")
+print("=" * 50)
+print("features:", len(classifier.feature_names_in_))
+print(classifier.feature_names_in_)
+print("classes:", classifier.classes_)
+
+print()
+print("=" * 50)
+print("QUALITY REGRESSOR")
+print("=" * 50)
+print("features:", len(quality_regressor.feature_names_in_))
+print(quality_regressor.feature_names_in_)
+
+print()
+print("=" * 50)
+print("SHOT DETECTOR")
+print("=" * 50)
+print("features:", len(shot_detector.feature_names_in_))
+print(shot_detector.feature_names_in_)
+print("classes:", shot_detector.classes_)
+
+print()
+print("=" * 50)
+print("LABEL ENCODER")
+print("=" * 50)
+print(label_encoder.classes_)
 
 
 class SensorData(BaseModel):
