@@ -1,14 +1,22 @@
+import joblib
+import pandas as pd
+import numpy as np
+
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-
-import joblib
-import pandas as pd
-import time
+from typing import List
 
 from src.features import extract_features
 from src.functions.visualization import create_visualization
+from src.functions.create_visualization_data import create_visualization_data
 from src.functions.detect_shots import detect_shots
+from src.schemas.visualization import VisualizationResponse, VisualizationRequest
+from src.schemas.sensor import SensorData, SensorSample
+
+from scipy.signal import savgol_filter
+from scipy.interpolate import splprep, splev
+
 
 app = FastAPI()
 
@@ -24,64 +32,6 @@ label_encoder = joblib.load(
     "models/label_encoder.pkl"
 )
 
-shot_detector = joblib.load(
-    "models/shot_detector.pkl"
-)
-
-print("=" * 50)
-print("CLASSIFIER")
-print("=" * 50)
-print("features:", len(classifier.feature_names_in_))
-print(classifier.feature_names_in_)
-print("classes:", classifier.classes_)
-
-print()
-print("=" * 50)
-print("QUALITY REGRESSOR")
-print("=" * 50)
-print("features:", len(quality_regressor.feature_names_in_))
-print(quality_regressor.feature_names_in_)
-
-print()
-print("=" * 50)
-print("SHOT DETECTOR")
-print("=" * 50)
-print("features:", len(shot_detector.feature_names_in_))
-print(shot_detector.feature_names_in_)
-print("classes:", shot_detector.classes_)
-
-print()
-print("=" * 50)
-print("LABEL ENCODER")
-print("=" * 50)
-print(label_encoder.classes_)
-
-
-class SensorData(BaseModel):
-    samples: list
-
-
-class SensorSample(BaseModel):
-    accel_x: float
-    accel_y: float
-    accel_z: float
-
-    linear_x: float
-    linear_y: float
-    linear_z: float
-
-    gyro_x: float
-    gyro_y: float
-    gyro_z: float
-
-    rot_x: float
-    rot_y: float
-    rot_z: float
-    rot_w: float
-
-
-class VisualizationRequest(BaseModel):
-    samples: list[SensorSample]
 
 
 @app.post("/predict")
@@ -185,3 +135,16 @@ def detect_multiple(data: SensorData):
         ]
 
     return predictions
+
+
+@app.post("/visualize-data", response_model=VisualizationResponse)
+def visualize_data(request: VisualizationRequest):
+
+    df = pd.DataFrame(
+        [
+            sample.model_dump()
+            for sample in request.samples
+        ]
+    )
+
+    return create_visualization_data(df)
