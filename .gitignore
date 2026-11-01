@@ -3,3 +3,9 @@
 __pycache__/
 *.pyc
 data/public/silent_impact/raw/*.pkl
+
+# Silent Impact trained models
+models/silent_impact_baseline/*.joblib
+
+# Silent Impact report models
+reports/silent_impact_baseline/*.joblib
